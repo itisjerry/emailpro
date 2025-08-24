@@ -1,3 +1,4 @@
+export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
       messages.push({
         uid: msg.uid,
         subject: msg.envelope?.subject,
-        from: msg.envelope?.from?.map(a=>a.address).join(", "),
+        from: msg.envelope?.from? .map((a: any) => a.address) .join(", "),
         date: msg.envelope?.date
       });
     }
