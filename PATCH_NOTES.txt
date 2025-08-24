@@ -1,0 +1,15 @@
+This patch turns OFF Google/Microsoft OAuth and leaves:
+- Email/password signup (with email verification)
+- SMTP accounts only (with incoming IMAP or POP, plus CSV import)
+
+Apply:
+1) Unzip into your repo root and overwrite files.
+2) Commit & push.
+3) Ensure dependencies include 'poplib' (for POP3). If not installed, run:
+   npm i poplib
+
+Vercel env must include:
+- DATABASE_URL
+- NEXTAUTH_URL
+- NEXTAUTH_SECRET
+- SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM (for verification emails)

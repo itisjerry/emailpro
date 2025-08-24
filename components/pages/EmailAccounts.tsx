@@ -1,141 +1,124 @@
 'use client';
 import { useState } from 'react';
+import Papa from 'papaparse';
 import { useApp } from '@/context/AppState';
-import { Upload, Plus, Edit, Trash2 } from 'lucide-react';
 
 export default function EmailAccounts() {
-  const { emailAccounts, addEmailAccount, handleFileUpload } = useApp();
-  const [showAdd, setShowAdd] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [provider, setProvider] = useState('gmail');
-  const [dailyLimit, setDailyLimit] = useState(50);
+  const { emailAccounts, setEmailAccounts } = useApp();
+
+  const [form, setForm] = useState<any>({
+    email: '', displayName: '',
+    username: '', password: '',
+    incoming_protocol: 'imap',
+    incoming_host: '', incoming_port: 993, incoming_secure: true,
+    smtp_host: '', smtp_port: 587, smtp_secure: false,
+    dailyLimit: 100
+  });
+  const [msg, setMsg] = useState('');
+
+  const verify = async () => {
+    setMsg('Verifying...');
+    const res = await fetch('/api/accounts/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
+    });
+    const d = await res.json();
+    setMsg(res.ok ? 'Verified OK ✅' : `Failed: ${d.error || 'Unknown error'}`);
+  };
+
+  const save = async () => {
+    setMsg('Saving...');
+    const res = await fetch('/api/accounts/add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
+    });
+    const d = await res.json();
+    if (!res.ok) { setMsg(`Failed: ${d.error || 'Unknown error'}`); return; }
+    setMsg('Saved ✅');
+    setEmailAccounts(prev => [...prev, {
+      id: d.id, email: form.email, provider: 'smtp', status: 'Connected',
+      reputation: 90, dailyLimit: form.dailyLimit, sentToday: 0, warmupPhase: 'Active',
+      lastActivity: 'Just now', domain: (form.email.split('@')[1] || '')
+    } as any]);
+  };
+
+  const onCsv = async (file: File) => {
+    setMsg('Uploading CSV...');
+    const text = await file.text();
+    const parsed = Papa.parse(text, { header: true });
+    const res = await fetch('/api/accounts/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accounts: parsed.data })
+    });
+    const d = await res.json();
+    setMsg(`Imported: ${d.ok} ok, ${d.fail} failed`);
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Email Accounts</h1>
-        <div className="flex space-x-3">
-          <label className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 cursor-pointer flex items-center">
-            <Upload className="h-4 w-4 mr-2" />
-            Upload CSV
-            <input type="file" accept=".csv" onChange={(e)=>{
-              const f=e.target.files?.[0]; if(f) handleFileUpload(f,'emailList');}} className="hidden" />
-          </label>
-          <button
-            onClick={()=>setShowAdd(true)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center"
-          >
-            <Plus className="h-4 w-4 mr-2" /> Add Account
-          </button>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">SMTP / IMAP / POP3 Accounts</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl p-4 shadow">
+          <h2 className="font-semibold mb-3">Add account</h2>
+          <div className="space-y-2">
+            <input className="w-full p-2 border rounded" placeholder="Email (From)" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/>
+            <input className="w-full p-2 border rounded" placeholder="Display name (optional)" value={form.displayName} onChange={e=>setForm({...form, displayName:e.target.value})}/>
+            <input className="w-full p-2 border rounded" placeholder="Mailbox username" value={form.username} onChange={e=>setForm({...form, username:e.target.value})}/>
+            <input className="w-full p-2 border rounded" placeholder="Mailbox password / app password" type="password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})}/>
+
+            <div className="grid grid-cols-3 gap-2">
+              <select className="p-2 border rounded col-span-3" value={form.incoming_protocol} onChange={e=>setForm({...form, incoming_protocol:e.target.value})}>
+                <option value="imap">IMAP (recommended)</option>
+                <option value="pop3">POP3</option>
+              </select>
+              <input className="p-2 border rounded" placeholder="Incoming host" value={form.incoming_host} onChange={e=>setForm({...form, incoming_host:e.target.value})}/>
+              <input className="p-2 border rounded" placeholder="Port" type="number" value={form.incoming_port} onChange={e=>setForm({...form, incoming_port:Number(e.target.value)})}/>
+              <label className="inline-flex items-center gap-2 p-2 border rounded">
+                <input type="checkbox" checked={form.incoming_secure} onChange={e=>setForm({...form, incoming_secure:e.target.checked})}/>
+                SSL/TLS
+              </label>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <input className="p-2 border rounded col-span-3" placeholder="SMTP host" value={form.smtp_host} onChange={e=>setForm({...form, smtp_host:e.target.value})}/>
+              <input className="p-2 border rounded" placeholder="SMTP port" type="number" value={form.smtp_port} onChange={e=>setForm({...form, smtp_port:Number(e.target.value)})}/>
+              <label className="inline-flex items-center gap-2 p-2 border rounded">
+                <input type="checkbox" checked={form.smtp_secure} onChange={e=>setForm({...form, smtp_secure:e.target.checked})}/>
+                SSL/TLS (465). Uncheck for STARTTLS (587).
+              </label>
+              <input className="p-2 border rounded col-span-3" placeholder="Daily send limit" type="number" value={form.dailyLimit} onChange={e=>setForm({...form, dailyLimit:Number(e.target.value)})}/>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={verify} className="px-4 py-2 bg-gray-200 rounded">Verify</button>
+              <button onClick={save} className="px-4 py-2 bg-indigo-600 text-white rounded">Save</button>
+            </div>
+            {msg && <p className="text-sm text-gray-700">{msg}</p>}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-4 shadow">
+          <h2 className="font-semibold mb-3">Bulk import from CSV</h2>
+          <p className="text-sm mb-2">
+            Columns: email, displayName, username, password, incoming_protocol, incoming_host, incoming_port, incoming_secure, smtp_host, smtp_port, smtp_secure, dailyLimit
+          </p>
+          <input type="file" accept=".csv" onChange={e=>e.target.files && onCsv(e.target.files[0])}/>
         </div>
       </div>
 
-      {showAdd && (
-        <div className="mb-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Add New Email Account</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-              <input type="email" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="your@email.com"/>
+      <div className="bg-white rounded-xl p-4 shadow">
+        <h2 className="font-semibold mb-3">Connected Accounts</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {emailAccounts.map((a:any)=>(
+            <div key={a.id} className="border rounded p-3">
+              <div className="font-medium">{a.email}</div>
+              <div className="text-sm text-gray-600">SMTP / {(a.email||'').split('@')[1]}</div>
+              <div className="text-sm">Limit: {a.dailyLimit} / day</div>
+              <div className="text-sm">Sent today: {a.sentToday}</div>
+              <div className="text-sm">{a.status}</div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-              <input type="password" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="App password or OAuth"/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Provider</label>
-              <select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                value={provider} onChange={(e)=>setProvider(e.target.value)}>
-                <option value="gmail">Gmail</option>
-                <option value="outlook">Microsoft 365 / Outlook</option>
-                <option value="yahoo">Yahoo</option>
-                <option value="custom">Custom SMTP/IMAP</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Daily Send Limit</label>
-              <input type="number" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                value={dailyLimit} onChange={(e)=>setDailyLimit(parseInt(e.target.value))} min={1} max={200}/>
-            </div>
-          </div>
-          <div className="flex justify-end space-x-3 mt-6">
-            <button onClick={()=>setShowAdd(false)} className="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
-            <button onClick={()=>{ addEmailAccount({email, provider, password, dailyLimit}); setShowAdd(false); setEmail(''); setPassword(''); setProvider('gmail'); setDailyLimit(50);}}
-              className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700"
-              disabled={!email || !password}
-            >Add Account</button>
-          </div>
+          ))}
         </div>
-      )}
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reputation</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Limit</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warmup</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {emailAccounts.map((account) => (
-              <tr key={account.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{account.email}</div>
-                    <div className="text-sm text-gray-500">{account.lastActivity}</div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.provider}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    account.status === 'Connected' ? 'bg-green-100 text-green-800' :
-                    account.status === 'Connecting...' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {account.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    account.reputation >= 90 ? 'bg-green-100 text-green-800' :
-                    account.reputation >= 75 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {account.reputation}%
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {account.sentToday}/{account.dailyLimit}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    account.warmupPhase === 'Active' ? 'bg-blue-100 text-blue-800' :
-                    account.warmupPhase === 'Starting' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {account.warmupPhase}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button className="text-indigo-600 hover:text-indigo-900 mr-3">
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button className="text-red-600 hover:text-red-900">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
