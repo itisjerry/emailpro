@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       messages.push({
         uid: msg.uid,
         subject: msg.envelope?.subject,
-        from: msg.envelope?.from? .map((a: any) => a.address) .join(", "),
+                from: msg.envelope?.from?.map((a: any) => a.address).join(", "),
         date: msg.envelope?.date
       });
     }
