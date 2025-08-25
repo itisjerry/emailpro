@@ -1,14 +1,17 @@
 'use client';
 import { useApp } from '@/context/AppState';
 import { Mail, BarChart3, Settings, Send, Users, Copy, Globe, Inbox } from 'lucide-react';
+import { signOut } from 'next-auth/react';
 
 export default function Navigation() {
-  const { currentPage, setCurrentPage, user, signout } = useApp();
+  const { currentPage, setCurrentPage, user } = useApp();
 
   const btn = (key: any, icon: any, label: string) => (
     <button
       onClick={() => setCurrentPage(key)}
-      className={`w-full flex items-center p-3 rounded-lg transition-colors ${currentPage === key ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}
+      className={`w-full flex items-center p-3 rounded-lg transition-colors ${
+        currentPage === key ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'
+      }`}
     >
       {icon}
       <span className="ml-3">{label}</span>
@@ -35,8 +38,8 @@ export default function Navigation() {
 
       <div className="absolute bottom-4 left-4 right-4">
         <div className="bg-gray-50 p-3 rounded-lg">
-          <p className="text-sm text-gray-600 mb-2">Welcome, {user?.name}!</p>
-          <button onClick={signout} className="text-sm text-red-600 hover:text-red-700">
+          <p className="text-sm text-gray-600 mb-2">Welcome, {user?.name ?? user?.email ?? 'user'}!</p>
+          <button onClick={() => signOut()} className="text-sm text-red-600 hover:text-red-700">
             Sign Out
           </button>
         </div>
