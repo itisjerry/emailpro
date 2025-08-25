@@ -9,6 +9,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
 type Any = any;
+type BasicSession = { user?: { email?: string | null } } | null;
+
 async function verifySMTP({ host, port, secure, user, pass }: Any) {
   const transporter = nodemailer.createTransport({ host, port: Number(port), secure: !!secure, auth: { user, pass } });
   await transporter.verify();
@@ -19,7 +21,7 @@ async function verifyIMAP({ host, port, secure, user, pass }: Any) {
 }
 function verifyPOP({ host, port, secure, user, pass }: Any) {
   return new Promise<void>((resolve, reject) => {
-    const client = new POP3(Number(port), host, { tlserrs: false, enabletls: !!secure, debug: false });
+    const client = new (POP3 as any)(Number(port), host, { tlserrs: false, enabletls: !!secure, debug: false } as any);
     client.on('error', reject);
     client.on('connect', () => client.login(user, pass));
     client.on('login', (status: boolean) => status ? (client.quit(), resolve()) : reject(new Error('POP3 login failed')));
@@ -27,9 +29,9 @@ function verifyPOP({ host, port, secure, user, pass }: Any) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions as any);
+  const session = await getServerSession(authOptions as any) as BasicSession;
   if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const me = await prisma.user.findUnique({ where: { email: session.user.email } });
+  const me = await prisma.user.findUnique({ where: { email: session.user.email as string } });
   if (!me) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { accounts } = await req.json();
